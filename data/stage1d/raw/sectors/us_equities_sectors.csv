@@ -1,0 +1,15 @@
+security_id,sector,industry
+SEC_AAPL,TECHNOLOGY,Consumer Electronics
+SEC_MSFT,TECHNOLOGY,Software - Infrastructure
+SEC_TSLA,CONSUMER_CYCLICAL,Auto Manufacturers
+SEC_NVDA,TECHNOLOGY,Semiconductors
+SEC_AMD,TECHNOLOGY,Semiconductors
+SEC_AMZN,CONSUMER_CYCLICAL,Internet Retail
+SEC_META,COMMUNICATION,Internet Content & Information
+SEC_SIVB,FINANCIALS,Banks - Regional
+SEC_XOM,ENERGY,Oil & Gas Integrated
+SEC_JNJ,HEALTHCARE,Drug Manufacturers - General
+SEC_RECY_OLD,INDUSTRIALS,Waste Management
+SEC_RECY_NEW,ENERGY,Solar
+SEC_PENNY,TECHNOLOGY,Software
+SEC_ILLIQ,INDUSTRIALS,Specialty Industrial Machinery

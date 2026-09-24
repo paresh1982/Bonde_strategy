@@ -1,0 +1,30 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Large Datasets (DuckDB, Parquet, CSV, ZIP)
+data/raw/*
+!data/raw/**/.gitkeep
+data/processed/*
+!data/processed/**/.gitkeep
+data/metadata/*.duckdb*
+!data/metadata/.gitkeep
+data/quality/*.json
+data/quality/*.log
+!data/quality/.gitkeep
+
+# OS generated
+.DS_Store
+Thumbs.db

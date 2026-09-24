@@ -1,0 +1,557 @@
+<USER_REQUEST>
+STAGE 1D — FULL-SCALE US HISTORICAL BACKTEST
+
+We are now moving from data/infrastructure validation into empirical strategy validation.
+
+IMPORTANT:
+- US MARKET ONLY.
+- Do NOT implement India.
+- Do NOT modify the authoritative strategy documents 01–06.
+- Do NOT change strategy parameters simply because early results are poor.
+- Do NOT optimize parameters to historical results.
+- Treat all existing numerical rules as hypotheses to be tested.
+- Preserve the deterministic Stage 0–1C architecture.
+- Every backtest result must be reproducible from a versioned dataset and configuration.
+
+OBJECTIVE
+
+Build Stage 1D as a rigorous multi-year, point-in-time, survivorship-bias-aware US backtesting framework.
+
+The primary objective is NOT to maximize CAGR.
+
+The primary objective is to determine whether the strategy demonstrates statistically and economically meaningful edge after:
+
+1. Point-in-time data constraints
+2. Delisted securities
+3. Ticker recycling
+4. Corporate actions
+5. Intraday execution constraints
+6. Stop-limit collar misses
+7. Same-bar STOP-FIRST logic
+8. Liquidity participation limits
+9. Portfolio heat limits
+10. Sector concentration limits
+11. Internal loss governors
+12. Market regime governors
+13. T+2 stall exits
+14. +2R partial exits
+15. Runner management
+16. Realistic transaction-cost/slippage assumptions
+
+PHASE 1 — DATA INGESTION
+
+Implement a reproducible ingestion workflow for the commercial US datasets.
+
+Expected data:
+
+A. Norgate:
+- Security master
+- Active securities
+- Delisted securities
+- Historical ticker mappings
+- Daily unadjusted prices
+- Daily split-adjusted analytical prices
+- Corporate actions
+- Historical universe information where available
+
+B. FirstRate:
+- Historical 1-minute US equity bars
+- Regular trading hours
+- Unadjusted execution prices
+- Timestamp-normalized data
+
+C. Earnings:
+- Historical announcement timestamps
+- BMO / AMC classification
+
+D. SEC:
+- Historical 8-K filings
+- acceptanceDateTime
+- qualifying filing/event metadata
+
+Before any backtest begins:
+
+RUN ALL DATA QUALITY GATES.
+
+If a dataset fails a critical validation gate:
+- FAIL CLOSED
+- Do not silently repair execution data
+- Produce a data-quality report
+- Stop the affected backtest period
+
+PHASE 2 — POINT-IN-TIME UNIVERSE CONSTRUCTION
+
+For every trading session T:
+
+1. Resolve securities using security_id as-of T.
+2. Exclude securities that did not exist/list yet.
+3. Exclude securities after delisting.
+4. Respect ticker changes.
+5. Calculate all analytical indicators using information available no later than T-1 close unless the strategy explicitly permits information at another timestamp.
+6. Never use future data to construct:
+   - 65D High
+   - ADV50
+   - 10 EMA
+   - price filters
+   - liquidity filters
+   - float filters
+   - sector classifications
+   - market regime
+
+Create a reproducible daily universe snapshot.
+
+Store:
+
+session_date
+security_id
+ticker_as_of_date
+price
+ADV50
+DollarADV50
+65D_high
+10EMA
+float
+market_cap
+sector
+eligibility
+rejection_reason
+
+PHASE 3 — CANDIDATE GENERATION
+
+Run the existing strategy modules WITHOUT modifying their rules.
+
+Generate candidates for:
+
+1. Catalyst Engine
+   - Track A
+   - Track B
+   - EP
+   - EP9M
+   - DEP where currently implemented
+
+2. Base-Hit Engine
+   - 65D breakout
+   - Inside-Day / squeeze modules where implemented
+   - Other already implemented modules
+
+Every candidate must receive:
+
+candidate_id
+security_id
+session_date
+engine
+module
+catalyst_track
+trigger_price
+structural_stop
+planned_risk_pct
+risk_geometry
+ADV50
+liquidity_cap
+planned_shares
+allocated_shares
+fractional_R
+rejection_reason
+
+Do NOT add discretionary candidate selection.
+
+PHASE 4 — INTRADAY EXTRACTION
+
+Only retrieve 1-minute bars for securities that actually qualify as candidates or are required for portfolio management.
+
+Maintain strict chronology.
+
+Required timeline:
+
+08:00 ET
+→ pre-market catalyst processing
+→ 09:29:59 information cutoff
+→ 09:30 market open
+→ 09:30–09:34 ORB
+→ order staging
+→ intraday execution
+→ 10:15 stale-order purge
+→ position management
+→ 15:55 EOD governor
+→ 16:00 close
+
+No future information may influence an earlier decision.
+
+PHASE 5 — EXECUTION SIMULATION
+
+Use the existing Stage 0.2 execution engine.
+
+Mandatory invariants:
+
+1. STOP-FIRST on same-bar collision.
+2. Entry-bar stop evaluation.
+3. Adverse gap through stop executes at bar OPEN.
+4. Stop-limit collar:
+   - trigger
+   - limit
+   - no chasing above collar
+5. Unfilled orders expire at 10:15.
+6. No lookahead.
+7. Unadjusted prices for execution.
+8. Integer share quantities.
+9. 1.5% ADV participation ceiling.
+10. 0.60R minimum viable allocation.
+11. Single-ticker maximum 1.0R.
+12. Sector maximum 2.0R.
+13. Portfolio heat maximum 6.0R.
+14. Internal governor veto.
+15. External market governor veto.
+
+PHASE 6 — COST MODEL
+
+Stage 1D must NOT report only zero-friction results.
+
+Run at least THREE cost scenarios:
+
+A. ZERO-COST BASELINE
+- Commission = $0
+- Slippage = $0
+
+B. CONSERVATIVE RETAIL/ACTIVE TRADER MODEL
+- Fixed commission assumption
+- Bid/ask/slippage assumption
+- Explicitly document every parameter
+
+C. STRESS MODEL
+- Higher slippage
+- Wider spread
+- Adverse stop execution
+- Gap-through-stop scenarios
+
+Do NOT tune the strategy to any cost scenario.
+
+Report results separately.
+
+PHASE 7 — PORTFOLIO SIMULATION
+
+Run the complete portfolio rather than evaluating trades independently.
+
+Enforce:
+
+GREEN:
+- up to 3R daily allocation where applicable
+
+YELLOW:
+- 1R Catalyst allocation
+
+RED:
+- no new risk
+
+Also enforce:
+
+- Catalyst seniority
+- Base-Hit residual allocation
+- single-ticker deduplication
+- sector cap
+- portfolio heat cap
+- internal loss governor
+- market governor
+
+Do not assume every qualifying signal gets capital.
+
+The backtest must reproduce the actual capital-allocation waterfall.
+
+PHASE 8 — TRADE TELEMETRY
+
+Every completed trade must produce the existing 27-field trade record.
+
+Additionally store:
+
+- dataset version
+- strategy configuration hash
+- code version/commit
+- security_id
+- ticker at trade date
+- engine
+- module
+- regime
+- entry timestamp
+- exit timestamp
+- entry price
+- exit price
+- planned risk
+- actual risk
+- R result
+- MAE
+- MFE
+- time to +1R
+- time to +2R
+- partial exit
+- runner result
+- slippage
+- commission
+- rejection reason where applicable
+
+PHASE 9 — PRIMARY PERFORMANCE REPORT
+
+Do NOT optimize or rank configurations yet.
+
+Produce descriptive results for:
+
+A. Unified portfolio
+
+B. Catalyst Engine
+
+C. Base-Hit Engine
+
+D. Individual modules
+
+E. Market regimes
+
+F. Calendar years
+
+G. Long/short market environments where applicable to the external regime classification
+
+For each report:
+
+- Number of trades
+- Win rate
+- Average R
+- Median R
+- Expectancy
+- Average winner
+- Average loser
+- Payoff ratio
+- Profit factor
+- Maximum drawdown
+- CAGR
+- Sharpe
+- Sortino
+- MAE
+- MFE
+- Time to +1R
+- Time to +2R
+- Average holding period
+- Exposure
+- Cash percentage
+- Turnover
+- Slippage cost
+- Commission cost
+
+PHASE 10 — DISTRIBUTION ANALYSIS
+
+Do not rely only on averages.
+
+Produce:
+
+- R distribution
+- Win/loss distribution
+- Maximum adverse excursion
+- Maximum favorable excursion
+- Right-tail contribution
+- Top 1%, 5%, 10% winners
+- Bottom 1%, 5%, 10% losses
+- Median trade
+- Median winning trade
+- Median losing trade
+
+Critically answer:
+
+"What percentage of total system profit comes from the largest 1, 5, and 10 winners?"
+
+This is essential for determining whether the Catalyst Engine's apparent edge is dependent on a tiny number of outliers.
+
+PHASE 11 — ABLATION TESTS
+
+Run the predefined architectural ablations.
+
+At minimum:
+
+1. Without Market Monitor
+2. Without 03:55 EOD Governor
+3. Without +2R de-risking
+4. Without ≤4% geometry gate
+5. Without 10 EMA runner
+6. Without 2R sector cap
+7. Without Internal Loss Governor
+8. Without liquidity participation cap
+9. Without stop-limit collar
+10. Without Catalyst seniority
+
+Do not alter other variables during an ablation.
+
+Report the difference relative to the baseline.
+
+PHASE 12 — PARAMETER SENSITIVITY
+
+Do NOT optimize.
+
+Instead test predefined neighboring values.
+
+Examples:
+
+Price floor:
+$3 / $5
+
+Risk geometry:
+3% / 4% / 5%
+
+ADV participation:
+1.0% / 1.5% / 2.0%
+
+Liquidity floor:
+0.50R / 0.60R / 0.75R
+
+65D breakout:
+60D / 65D / 70D
+
+Do NOT select the best-performing parameter.
+
+The purpose is to determine whether performance is:
+
+ROBUST
+FRAGILE
+OR
+HIGHLY PARAMETER-SENSITIVE
+
+PHASE 13 — WALK-FORWARD VALIDATION
+
+Divide the historical dataset chronologically.
+
+Do NOT randomly shuffle trades.
+
+Use chronological walk-forward periods.
+
+Example:
+
+TRAIN → VALIDATE → TEST
+
+Then roll forward.
+
+The final untouched period must be treated as an out-of-sample test.
+
+Do not modify strategy parameters based on the final test period.
+
+PHASE 14 — CAPACITY ANALYSIS
+
+Run the same strategy at multiple hypothetical account sizes:
+
+$25K
+$50K
+$100K
+$250K
+$500K
+$1M
+$1.5M
+$2.5M
+
+Measure:
+
+- % trades fully sized
+- % fractional trades
+- % rejected for liquidity
+- average participation %
+- turnover
+- slippage
+- expectancy degradation
+- CAGR degradation
+
+Do not assume the $2.5M capacity hypothesis is correct.
+
+Test it.
+
+PHASE 15 — FINAL STAGE 1D REPORT
+
+Create:
+
+docs/stage1d_backtest_report.md
+
+Also create:
+
+docs/stage1d_trade_distribution.md
+docs/stage1d_regime_report.md
+docs/stage1d_ablation_report.md
+docs/stage1d_sensitivity_report.md
+docs/stage1d_walkforward_report.md
+docs/stage1d_capacity_report.md
+docs/stage1d_data_quality_report.md
+
+Create machine-readable outputs:
+
+data/results/trades.parquet
+data/results/equity_curve.parquet
+data/results/daily_portfolio.parquet
+data/results/rejections.parquet
+data/results/ablation_results.parquet
+data/results/sensitivity_results.parquet
+
+PHASE 16 — RESEARCH INTEGRITY
+
+The final report MUST clearly distinguish:
+
+1. ARCHITECTURAL FACT
+2. BACKTEST OBSERVATION
+3. HYPOTHESIS
+4. ASSUMPTION
+5. DATA LIMITATION
+
+Never describe the strategy as profitable or possessing a persistent edge merely because the code executes correctly.
+
+A successful Stage 1D software run means:
+
+"Historical simulation completed correctly."
+
+It does NOT mean:
+
+"The strategy works."
+
+Only the empirical results can determine that.
+
+CRITICAL STOP CONDITIONS
+
+Stop and report rather than silently proceeding if:
+
+- point-in-time identity cannot be resolved
+- required historical data is missing
+- intraday bars are incomplete
+- corporate-action adjustment cannot be reconciled
+- catalyst timestamp cannot be established
+- market regime data is unavailable
+- historical sector classification is unavailable
+- dataset contains survivorship bias
+- execution prices require adjusted data
+- future information is detected in an earlier decision
+
+FINAL DELIVERABLE
+
+At completion, provide:
+
+1. Stage 1D status
+2. Total historical sessions
+3. Total securities
+4. Total candidates
+5. Total executed trades
+6. Total rejected trades
+7. Baseline expectancy
+8. Cost-adjusted expectancy
+9. Maximum drawdown
+10. Profit factor
+11. CAGR
+12. Catalyst expectancy
+13. Base-Hit expectancy
+14. Regime attribution
+15. Largest winner contribution
+16. Ablation findings
+17. Sensitivity findings
+18. Walk-forward findings
+19. Capacity findings
+20. Data limitations
+21. Any unresolved assumptions
+22. Whether the system is ready for Stage 2 or requires research iteration
+
+IMPORTANT:
+Do not proceed to live trading.
+Do not build broker integration.
+Do not implement India.
+Do not redesign the strategy.
+
+Stage 1D is strictly a historical research and validation phase.
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-09-23T13:10:36+05:30.
+</ADDITIONAL_METADATA>

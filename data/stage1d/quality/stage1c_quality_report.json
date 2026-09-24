@@ -1,0 +1,23 @@
+{
+  "stage": "STAGE_1C_DATA_QUALITY_AUDIT",
+  "timestamp": "2026-09-23T09:03:53.082267+00:00",
+  "overall_status": "PASS",
+  "security_master": {
+    "total_securities": 14,
+    "active_securities": 12,
+    "delisted_securities": 2,
+    "history_mapping_windows": 15,
+    "status": "PASS",
+    "anomalies": 0
+  },
+  "daily_bars": {
+    "total_bars": 18558,
+    "status": "PASS",
+    "anomalies": 0
+  },
+  "intraday_bars": {
+    "total_bars": 2730,
+    "status": "PASS",
+    "anomalies": 0
+  }
+}

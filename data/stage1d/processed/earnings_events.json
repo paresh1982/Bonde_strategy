@@ -1,0 +1,205 @@
+[
+  {
+    "security_id": "AAPL",
+    "event_date": "2019-01-29",
+    "timing": "AMC",
+    "availability_timestamp": "2019-01-29T16:30:00-05:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "AAPL",
+    "event_date": "2019-04-30",
+    "timing": "AMC",
+    "availability_timestamp": "2019-04-30T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "AAPL",
+    "event_date": "2019-07-30",
+    "timing": "AMC",
+    "availability_timestamp": "2019-07-30T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "TSLA",
+    "event_date": "2019-10-23",
+    "timing": "AMC",
+    "availability_timestamp": "2019-10-23T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "AAPL",
+    "event_date": "2019-10-30",
+    "timing": "AMC",
+    "availability_timestamp": "2019-10-30T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "TSLA",
+    "event_date": "2020-01-29",
+    "timing": "AMC",
+    "availability_timestamp": "2020-01-29T16:30:00-05:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "TSLA",
+    "event_date": "2020-04-29",
+    "timing": "AMC",
+    "availability_timestamp": "2020-04-29T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "AAPL",
+    "event_date": "2020-04-30",
+    "timing": "AMC",
+    "availability_timestamp": "2020-04-30T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "NVDA",
+    "event_date": "2020-05-21",
+    "timing": "AMC",
+    "availability_timestamp": "2020-05-21T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "TSLA",
+    "event_date": "2020-07-22",
+    "timing": "AMC",
+    "availability_timestamp": "2020-07-22T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "AMD",
+    "event_date": "2020-07-28",
+    "timing": "AMC",
+    "availability_timestamp": "2020-07-28T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "AAPL",
+    "event_date": "2020-07-30",
+    "timing": "AMC",
+    "availability_timestamp": "2020-07-30T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "NVDA",
+    "event_date": "2020-08-19",
+    "timing": "AMC",
+    "availability_timestamp": "2020-08-19T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "TSLA",
+    "event_date": "2020-10-21",
+    "timing": "AMC",
+    "availability_timestamp": "2020-10-21T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "AAPL",
+    "event_date": "2020-10-29",
+    "timing": "AMC",
+    "availability_timestamp": "2020-10-29T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "TSLA",
+    "event_date": "2021-01-27",
+    "timing": "BMO",
+    "availability_timestamp": "2021-01-27T07:15:00-05:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "AAPL",
+    "event_date": "2021-01-27",
+    "timing": "AMC",
+    "availability_timestamp": "2021-01-27T16:30:00-05:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "TSLA",
+    "event_date": "2021-04-26",
+    "timing": "AMC",
+    "availability_timestamp": "2021-04-26T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "AAPL",
+    "event_date": "2021-04-28",
+    "timing": "AMC",
+    "availability_timestamp": "2021-04-28T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "NVDA",
+    "event_date": "2021-05-26",
+    "timing": "AMC",
+    "availability_timestamp": "2021-05-26T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "AAPL",
+    "event_date": "2021-07-27",
+    "timing": "AMC",
+    "availability_timestamp": "2021-07-27T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "AMD",
+    "event_date": "2021-07-27",
+    "timing": "AMC",
+    "availability_timestamp": "2021-07-27T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "TSLA",
+    "event_date": "2021-10-20",
+    "timing": "AMC",
+    "availability_timestamp": "2021-10-20T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "AAPL",
+    "event_date": "2022-04-28",
+    "timing": "AMC",
+    "availability_timestamp": "2022-04-28T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "TSLA",
+    "event_date": "2023-01-25",
+    "timing": "AMC",
+    "availability_timestamp": "2023-01-25T16:30:00-05:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "AAPL",
+    "event_date": "2023-02-02",
+    "timing": "AMC",
+    "availability_timestamp": "2023-02-02T16:30:00-05:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "NVDA",
+    "event_date": "2023-02-22",
+    "timing": "AMC",
+    "availability_timestamp": "2023-02-22T16:30:00-05:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "AAPL",
+    "event_date": "2023-05-04",
+    "timing": "AMC",
+    "availability_timestamp": "2023-05-04T16:30:00-04:00",
+    "source": "ZACKS"
+  },
+  {
+    "security_id": "NVDA",
+    "event_date": "2023-05-24",
+    "timing": "AMC",
+    "availability_timestamp": "2023-05-24T16:30:00-04:00",
+    "source": "ZACKS"
+  }
+]

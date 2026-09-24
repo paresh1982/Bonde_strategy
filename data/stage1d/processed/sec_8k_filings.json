@@ -1,0 +1,63 @@
+[
+  {
+    "security_id": "AAPL",
+    "cik": "0000320193",
+    "accession_number": "0000320193-20-000050",
+    "form": "8-K",
+    "items": [
+      "Item 2.02"
+    ],
+    "acceptance_datetime": "2020-07-30T12:30:15-04:00",
+    "availability_timestamp": "2020-07-30T12:30:15-04:00",
+    "source_url": "https://sec.gov/0000320193-20-000050.htm"
+  },
+  {
+    "security_id": "TSLA",
+    "cik": "0001318605",
+    "accession_number": "0001318605-20-000021",
+    "form": "8-K",
+    "items": [
+      "Item 8.01"
+    ],
+    "acceptance_datetime": "2020-08-11T12:30:00-04:00",
+    "availability_timestamp": "2020-08-11T12:30:00-04:00",
+    "source_url": "https://sec.gov/0001318605-20-000021.htm"
+  },
+  {
+    "security_id": "TSLA",
+    "cik": "0001318605",
+    "accession_number": "0001318605-20-000025",
+    "form": "8-K",
+    "items": [
+      "Item 1.01",
+      "Item 8.01"
+    ],
+    "acceptance_datetime": "2020-09-01T04:15:22-04:00",
+    "availability_timestamp": "2020-09-01T04:15:22-04:00",
+    "source_url": "https://sec.gov/0001318605-20-000025.htm"
+  },
+  {
+    "security_id": "NVDA",
+    "cik": "0001045810",
+    "accession_number": "0001045810-21-000062",
+    "form": "8-K",
+    "items": [
+      "Item 8.01"
+    ],
+    "acceptance_datetime": "2021-05-21T04:30:00-04:00",
+    "availability_timestamp": "2021-05-21T04:30:00-04:00",
+    "source_url": "https://sec.gov/0001045810-21-000062.htm"
+  },
+  {
+    "security_id": "NVDA",
+    "cik": "0001045810",
+    "accession_number": "0001045810-23-000045",
+    "form": "8-K",
+    "items": [
+      "Item 2.02"
+    ],
+    "acceptance_datetime": "2023-05-24T12:20:00-04:00",
+    "availability_timestamp": "2023-05-24T12:20:00-04:00",
+    "source_url": "https://sec.gov/0001045810-23-000045.htm"
+  }
+]

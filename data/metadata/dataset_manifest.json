@@ -1,0 +1,15 @@
+{
+  "us_equities_core": {
+    "dataset_name": "us_equities_core",
+    "provider": "NORGATE_FIRSTRATE_SEC",
+    "version": "1.0.0",
+    "download_timestamp": "2026-09-22T12:23:14.645932+00:00",
+    "coverage_start": "2020-01-02",
+    "coverage_end": "2021-03-31",
+    "symbol_count": 8,
+    "row_count": 1240,
+    "timezone": "America/New_York",
+    "adjustment_status": "DUAL_PRICE",
+    "checksum": "45276be715396bf2fe7435f743001984c69118618ebf59a60c0ece5e42106aa2"
+  }
+}
