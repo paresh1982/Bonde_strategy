@@ -24,6 +24,7 @@ data/metadata/*.duckdb*
 data/quality/*.json
 data/quality/*.log
 !data/quality/.gitkeep
+data/paper_test/
 
 # OS generated
 .DS_Store

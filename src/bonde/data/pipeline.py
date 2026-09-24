@@ -22,7 +22,6 @@ from datetime import date, datetime
 from typing import Dict, List, Optional
 
 from ..config.strategy_config import StrategyConfig
-from ..engine.backtest import Stage0BacktestEngine
 from .breadth import MarketBreadthProvider, PointInTimeMarketRegimeProvider
 from .dual_price import DailyBarProvider
 from .intraday import IntradayBarProvider
@@ -79,6 +78,7 @@ class HistoricalBacktestPipeline:
         )
 
         # Instantiate Stage 0.2 Backtest Engine
+        from ..engine.backtest import Stage0BacktestEngine
         self.engine = Stage0BacktestEngine(
             config=self.config,
             regime_provider=self.regime_provider,
