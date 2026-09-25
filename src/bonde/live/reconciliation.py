@@ -110,6 +110,34 @@ class OrderStateReconciler:
                 )
                 current_discrepancies.append(disc)
 
+        # 5. Detect missing strategy positions (broker net position > 0, but no open position in strategy portfolio)
+        broker_symbols = {o.symbol for o in all_orders if o.status == OrderStatus.FILLED}
+        for b_sym in broker_symbols:
+            b_buys = sum(o.quantity for o in all_orders if o.symbol == b_sym and o.status == OrderStatus.FILLED and o.side == OrderSide.BUY)
+            b_sells = sum(o.quantity for o in all_orders if o.symbol == b_sym and o.status == OrderStatus.FILLED and o.side == OrderSide.SELL)
+            net_broker = b_buys - b_sells
+            if net_broker > 0 and b_sym not in open_positions:
+                disc = Discrepancy(
+                    discrepancy_type="MISSING_STRATEGY_POSITION",
+                    symbol=b_sym,
+                    severity="CRITICAL",
+                    details=f"Broker has net position of {net_broker} shares for {b_sym}, but strategy portfolio has no open position",
+                    timestamp=current_time,
+                )
+                current_discrepancies.append(disc)
+
+        # 6. Detect invalid or unknown order IDs
+        for o in all_orders:
+            if not o.order_id or not o.symbol or o.order_id == "UNKNOWN":
+                disc = Discrepancy(
+                    discrepancy_type="UNKNOWN_ORDER_ID",
+                    symbol=o.symbol or "UNKNOWN",
+                    severity="CRITICAL",
+                    details=f"Encountered invalid or unknown order ID: '{o.order_id}'",
+                    timestamp=current_time,
+                )
+                current_discrepancies.append(disc)
+
         self.discrepancies.extend(current_discrepancies)
 
         if fail_closed:

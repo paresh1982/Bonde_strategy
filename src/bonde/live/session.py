@@ -20,7 +20,7 @@ from ..portfolio.portfolio import Portfolio, Position, PositionStatus
 from ..regime.market_regime import MarketRegime
 from ..risk.governors import CompositeRiskGovernor
 from ..telemetry.trade_log import TradeJournal
-from .broker import PaperExecutionBroker
+from .broker import PaperExecutionBroker, PaperFillRecord
 from .calendar import USMarketCalendar
 from .fill_model import PaperFillModel
 from .models import DataQualityStatus, LiveBar, Quote, TradingSession
@@ -41,6 +41,19 @@ class LiveSessionState:
     POSITION_MANAGEMENT = "POSITION_MANAGEMENT"
     EOD_AUDIT = "EOD_AUDIT"
     SESSION_CLOSED = "SESSION_CLOSED"
+
+
+VALID_SESSION_TRANSITIONS = {
+    LiveSessionState.PRE_MARKET: {LiveSessionState.OPENING, LiveSessionState.SESSION_CLOSED},
+    LiveSessionState.OPENING: {LiveSessionState.ORB_COLLECTION, LiveSessionState.ORDER_STAGING, LiveSessionState.ACTIVE_SESSION, LiveSessionState.SESSION_CLOSED},
+    LiveSessionState.ORB_COLLECTION: {LiveSessionState.ORDER_STAGING, LiveSessionState.ACTIVE_SESSION, LiveSessionState.SESSION_CLOSED},
+    LiveSessionState.ORDER_STAGING: {LiveSessionState.ACTIVE_SESSION, LiveSessionState.SESSION_CLOSED},
+    LiveSessionState.ACTIVE_SESSION: {LiveSessionState.STALE_ORDER_CUTOFF, LiveSessionState.POSITION_MANAGEMENT, LiveSessionState.EOD_AUDIT, LiveSessionState.SESSION_CLOSED},
+    LiveSessionState.STALE_ORDER_CUTOFF: {LiveSessionState.POSITION_MANAGEMENT, LiveSessionState.EOD_AUDIT, LiveSessionState.SESSION_CLOSED},
+    LiveSessionState.POSITION_MANAGEMENT: {LiveSessionState.EOD_AUDIT, LiveSessionState.SESSION_CLOSED},
+    LiveSessionState.EOD_AUDIT: {LiveSessionState.SESSION_CLOSED},
+    LiveSessionState.SESSION_CLOSED: set(),
+}
 
 
 class LiveSessionEngine:
@@ -94,6 +107,17 @@ class LiveSessionEngine:
         self._staged_orders: Dict[str, Order] = {}
         self._events_processed = 0
 
+    def transition_to(self, new_state: str):
+        """Transitions session state with strict fail-closed validation."""
+        if new_state == self.session.state:
+            return
+        allowed = VALID_SESSION_TRANSITIONS.get(self.session.state, set())
+        if new_state not in allowed:
+            raise SafetyError(
+                f"INVALID_STATE_TRANSITION: Cannot transition from {self.session.state} to {new_state}. Allowed: {allowed}"
+            )
+        self.session.state = new_state
+
     def run_premarket(self) -> DailyFocusList:
         """Step 1: 08:00 - 09:29 ET Pre-Market Preparation."""
         self.session.state = LiveSessionState.PRE_MARKET
@@ -103,12 +127,13 @@ class LiveSessionEngine:
             open_positions=list(self.portfolio.open_positions.values()),
             risk_governor=self.risk_governor,
         )
+        self.checkpoint()
         return self.focus_list
 
     def open_session(self):
         """Step 2: 09:30 ET Opening Bell."""
         LiveSafetyGovernor.assert_regime_valid(self.focus_list.regime if self.focus_list else None)
-        self.session.state = LiveSessionState.OPENING
+        self.transition_to(LiveSessionState.OPENING)
 
         # Increment days held for carried overnight positions
         for pos in self.portfolio.open_positions.values():
@@ -119,6 +144,11 @@ class LiveSessionEngine:
         Main chronological bar processor.
         Dispatches according to current session time and state.
         """
+        if self.session.state == LiveSessionState.PRE_MARKET:
+            raise SafetyError("INVALID_SESSION_STATE: Session is in PRE_MARKET state. Call open_session() before processing bars.")
+        if self.session.state == LiveSessionState.SESSION_CLOSED:
+            raise SafetyError("INVALID_SESSION_STATE: Session is SESSION_CLOSED. No new bars permitted.")
+
         # 1. Fail-closed data validation
         is_valid, rej = self.validator.validate_bar(bar, self.session, current_clock=bar.timestamp)
         if not is_valid:
@@ -136,22 +166,25 @@ class LiveSessionEngine:
 
         # 2. State Transition: 09:30 - 09:34:59 ORB Collection
         if time(9, 30) <= bar_time < time(9, 35):
-            self.session.state = LiveSessionState.ORB_COLLECTION
+            if self.session.state == LiveSessionState.OPENING:
+                self.transition_to(LiveSessionState.ORB_COLLECTION)
             self.orb_bars.setdefault(sym, []).append(bar)
 
-        # 3. State Transition: 09:35:00 Order Staging
-        elif bar_time == time(9, 35) and self.session.state == LiveSessionState.ORB_COLLECTION:
+        # 3. State Transition: >= 09:35:00 Order Staging
+        elif bar_time >= time(9, 35) and self.session.state in (LiveSessionState.OPENING, LiveSessionState.ORB_COLLECTION):
+            self.transition_to(LiveSessionState.ORDER_STAGING)
             self._stage_orders_at_0935()
-            self.session.state = LiveSessionState.ACTIVE_SESSION
+            self.transition_to(LiveSessionState.ACTIVE_SESSION)
 
         # 4. State Transition: 10:15:00 Stale Order Cutoff
         elif bar_time >= time(10, 15) and self.session.state == LiveSessionState.ACTIVE_SESSION:
             self._purge_stale_orders()
-            self.session.state = LiveSessionState.POSITION_MANAGEMENT
+            self.transition_to(LiveSessionState.POSITION_MANAGEMENT)
 
-        # 5. State Transition: 15:55:00 EOD Audit
-        elif bar_time >= time(15, 55) and self.session.state in (LiveSessionState.ACTIVE_SESSION, LiveSessionState.POSITION_MANAGEMENT):
-            self.session.state = LiveSessionState.EOD_AUDIT
+        # 5. State Transition: EOD Audit (15:55 regular, 12:55 early close)
+        audit_time = (self.session.close_time - timedelta(minutes=5)).time()
+        if bar_time >= audit_time and self.session.state in (LiveSessionState.ACTIVE_SESSION, LiveSessionState.POSITION_MANAGEMENT):
+            self.transition_to(LiveSessionState.EOD_AUDIT)
             self._evaluate_eod_audit(bar)
 
         # Intraday Execution & Management logic
@@ -164,7 +197,7 @@ class LiveSessionEngine:
 
         for c in self.focus_list.approved_candidates:
             sym = c.ticker or c.security_id
-            if sym in self.portfolio.open_positions:
+            if sym in self.portfolio.open_positions or sym in self._staged_orders:
                 continue
 
             # For Catalyst candidates, calculate trigger/stop from actual 09:30-09:34 bars
@@ -189,6 +222,7 @@ class LiveSessionEngine:
             )
             order_id = self.broker.submit_order(order, security_id=c.security_id)
             self._staged_orders[sym] = order
+        self.checkpoint()
 
     def _purge_stale_orders(self):
         """10:15 AM Stale Order Cutoff: cancels untriggered entry orders."""
@@ -290,9 +324,12 @@ class LiveSessionEngine:
                 self.portfolio.add_position(new_pos)
                 del self._staged_orders[sym]
 
-                # Immediate entry-bar stop breach check
+                # Immediate entry-bar check (STOP FIRST precedence)
                 if bar.low <= new_pos.current_stop:
                     self._close_position_internal(new_pos, bar, new_pos.current_stop, "ENTRY_BAR_STOP_BREACH", quote=quote)
+                elif new_pos.partial_target_price is not None and bar.high >= new_pos.partial_target_price:
+                    exit_p = max(new_pos.partial_target_price, bar.open) - self.fill_model.slippage_per_share
+                    new_pos.execute_partial_exit(exit_p, bar.timestamp, ratio=self.config.partial_exit_ratio)
 
     def _evaluate_eod_audit(self, bar: LiveBar):
         """03:55 PM EOD audit: liquidates failing/stalling uncushioned positions."""
@@ -366,9 +403,21 @@ class LiveSessionEngine:
         )
         self.telemetry.record_live_trade(live_telemetry_rec)
 
+    def checkpoint(self, checkpoint_name: Optional[str] = None):
+        """Checkpoints live state to disk."""
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        if self.focus_list:
+            self.focus_list.save_parquet(self.output_dir / "focus_list.parquet")
+        orders_df = self.broker.orders_to_dataframe()
+        if not orders_df.empty:
+            orders_df.to_parquet(self.output_dir / "orders.parquet", index=False)
+        fills_df = self.broker.fills_to_dataframe()
+        if not fills_df.empty:
+            fills_df.to_parquet(self.output_dir / "fills.parquet", index=False)
+
     def close_session(self) -> Dict[str, Any]:
         """Step 9: 16:00 ET Session Close, Reconciliation & Artifact Export."""
-        self.session.state = LiveSessionState.SESSION_CLOSED
+        self.transition_to(LiveSessionState.SESSION_CLOSED)
 
         # Run state reconciliation
         discrepancies = self.reconciler.reconcile(
@@ -416,3 +465,100 @@ class LiveSessionEngine:
             json.dump(summary, fh, indent=2)
 
         return summary
+
+    @classmethod
+    def recover_session(
+        cls,
+        session_date: date,
+        data_root: Path = Path("data/stage1d"),
+        output_dir: Path = Path("data/paper"),
+        initial_equity: float = 100_000.0,
+        config: Optional[StrategyConfig] = None,
+        fill_model: Optional[PaperFillModel] = None,
+    ) -> "LiveSessionEngine":
+        """
+        Deterministically recovers session state from persisted parquet checkpoints.
+        """
+        engine = cls(
+            session_date=session_date,
+            data_root=data_root,
+            output_dir=output_dir,
+            initial_equity=initial_equity,
+            config=config,
+            fill_model=fill_model,
+        )
+        target_dir = Path(output_dir) / session_date.strftime("%Y-%m-%d")
+
+        # 1. Recover Focus List
+        fl_path = target_dir / "focus_list.parquet"
+        if fl_path.exists():
+            engine.focus_list = DailyFocusList.load_parquet(fl_path)
+            engine.session.state = LiveSessionState.OPENING
+
+        # 2. Recover Orders
+        ord_path = target_dir / "orders.parquet"
+        if ord_path.exists():
+            df_ord = pd.read_parquet(ord_path)
+            for _, r in df_ord.iterrows():
+                o = Order(
+                    symbol=str(r["symbol"]),
+                    side=OrderSide(r["side"]),
+                    order_type=OrderType(r["order_type"]),
+                    quantity=int(r["quantity"]),
+                    trigger_price=float(r["trigger_price"]),
+                    limit_price=float(r["limit_price"]) if not pd.isna(r["limit_price"]) else None,
+                    stop_loss_price=float(r["stop_loss_price"]) if not pd.isna(r["stop_loss_price"]) else None,
+                    status=OrderStatus(r["status"]),
+                    created_at=r["created_at"].to_pydatetime() if hasattr(r["created_at"], "to_pydatetime") else r["created_at"],
+                    tag=str(r.get("tag", "")),
+                )
+                o.order_id = str(r["order_id"])
+                engine.broker._orders[o.order_id] = o
+                engine.broker._order_security_map[o.order_id] = str(r.get("security_id", f"SEC_{o.symbol}"))
+                if o.status == OrderStatus.PENDING:
+                    engine._staged_orders[o.symbol] = o
+            engine.session.state = LiveSessionState.ACTIVE_SESSION
+
+        # 3. Recover Fills & Positions
+        fills_path = target_dir / "fills.parquet"
+        if fills_path.exists():
+            df_fills = pd.read_parquet(fills_path)
+            for _, r in df_fills.iterrows():
+                fill_rec = PaperFillRecord(
+                    fill_id=str(r["fill_id"]),
+                    order_id=str(r["order_id"]),
+                    symbol=str(r["symbol"]),
+                    security_id=str(r["security_id"]),
+                    timestamp=r["timestamp"].to_pydatetime() if hasattr(r["timestamp"], "to_pydatetime") else r["timestamp"],
+                    side=str(r["side"]),
+                    fill_quantity=int(r["fill_quantity"]),
+                    fill_price=float(r["fill_price"]),
+                    commission=float(r["commission"]),
+                    slippage=float(r["slippage"]),
+                    effective_price=float(r["effective_price"]),
+                )
+                engine.broker._fills.append(fill_rec)
+
+                # If BUY fill, reconstruct position in portfolio
+                if fill_rec.side == "BUY":
+                    stop_p = fill_rec.fill_price * 0.96
+                    ord_obj = engine.broker.get_order(fill_rec.order_id)
+                    if ord_obj and ord_obj.stop_loss_price:
+                        stop_p = ord_obj.stop_loss_price
+                    new_pos = Position(
+                        symbol=fill_rec.symbol,
+                        side="LONG",
+                        entry_price=fill_rec.fill_price,
+                        entry_timestamp=fill_rec.timestamp,
+                        quantity=fill_rec.fill_quantity,
+                        initial_stop=stop_p,
+                        current_stop=stop_p,
+                        initial_risk_dollars=fill_rec.fill_quantity * (fill_rec.fill_price - stop_p),
+                        engine="CATALYST",
+                        setup_type=ord_obj.tag if ord_obj else "RECOVERED",
+                        regime_at_entry=engine.focus_list.regime if engine.focus_list else MarketRegime.GREEN,
+                    )
+                    engine.portfolio.add_position(new_pos)
+                    engine._staged_orders.pop(fill_rec.symbol, None)
+
+        return engine

@@ -73,6 +73,56 @@ class DailyFocusList:
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(summary, fh, indent=2)
 
+    @classmethod
+    def load_parquet(cls, path: Path) -> "DailyFocusList":
+        df = pd.read_parquet(path)
+        if df.empty:
+            raise ValueError(f"Empty focus list parquet at {path}")
+        first_row = df.iloc[0]
+        s_date = date.fromisoformat(first_row["session_date"])
+        regime = MarketRegime(first_row["regime"])
+
+        candidates = []
+        if "candidate_id" in df.columns:
+            for _, r in df.iterrows():
+                if pd.isna(r.get("candidate_id")):
+                    continue
+                cand = CandidateMetadata(
+                    candidate_id=str(r["candidate_id"]),
+                    security_id=str(r["security_id"]),
+                    session_date=s_date,
+                    engine=str(r["engine"]),
+                    module=str(r["module"]),
+                    catalyst_track=str(r.get("catalyst_track", "NONE")),
+                    trigger_price=float(r["trigger_price"]),
+                    structural_stop=float(r["structural_stop"]),
+                    planned_risk_pct=float(r["planned_risk_pct"]),
+                    risk_geometry=float(r["risk_geometry"]),
+                    adv50=float(r["adv50"]),
+                    liquidity_cap=float(r["liquidity_cap"]),
+                    planned_shares=int(r["planned_shares"]),
+                    allocated_shares=int(r["allocated_shares"]),
+                    fractional_r=float(r["fractional_r"]),
+                    rejection_reason=r.get("rejection_reason") if not pd.isna(r.get("rejection_reason")) else None,
+                    sector=str(r.get("sector", "GENERAL")),
+                    ticker=str(r.get("ticker", r["security_id"])),
+                )
+                candidates.append(cand)
+
+        approved = [c for c in candidates if c.rejection_reason is None]
+        rejected = [c for c in candidates if c.rejection_reason is not None]
+        daily_budget = 3.0 if regime == MarketRegime.GREEN else (1.0 if regime == MarketRegime.YELLOW else 0.0)
+        total_r = sum(c.fractional_r for c in approved)
+        return cls(
+            session_date=s_date,
+            regime=regime,
+            daily_budget_r=daily_budget,
+            total_allocated_r=total_r,
+            approved_candidates=approved,
+            rejected_candidates=rejected,
+            all_candidates=candidates,
+        )
+
 
 class DailyPrepPipeline:
     """
