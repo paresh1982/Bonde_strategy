@@ -1,116 +1,167 @@
 """
-Stage 2 Live & Paper Trading Command Line Interface
-Commands:
-  python -m bonde.live.cli validate
-  python -m bonde.live.cli prepare --date YYYY-MM-DD
-  python -m bonde.live.cli paper-session --date YYYY-MM-DD
-  python -m bonde.live.cli replay --fixture <name>
-  python -m bonde.live.cli status
+Stage 3.1 Live Paper-Trading CLI Runner
+Entry point for running controlled live US paper-trading sessions in OBSERVE or PAPER mode.
 """
 
 import argparse
 from datetime import date, datetime
+import logging
 from pathlib import Path
 import sys
 
-from .calendar import USMarketCalendar
-from .prep import DailyPrepPipeline
-from .session import LiveSessionEngine
-from .synthetic_session import SyntheticSessionReplayer
+from bonde.data.models import NY_TZ
+from bonde.live.adapters.alpaca import AlpacaConfig, AlpacaMarketDataAdapter
+from bonde.live.calendar import USMarketCalendar
+from bonde.live.operational_modes import OperationalMode
+from bonde.live.runner import LivePaperRunner
+from bonde.live.session import LiveSessionEngine
+from bonde.live.validation import LiveDataValidator
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger("bonde.live.cli")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Stage 2 US Live & Paper Trading CLI")
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
-
-    # 1. validate
-    validate_parser = subparsers.add_parser("validate", help="Validates calendar, providers, and fail-closed safety gates")
-
-    # 2. prepare
-    prep_parser = subparsers.add_parser("prepare", help="Runs pre-market pipeline and generates daily focus list")
-    prep_parser.add_argument("--date", type=str, default=None, help="Session date (YYYY-MM-DD), default=today")
-    prep_parser.add_argument("--data-root", type=str, default="data/stage1d", help="Path to data root")
-
-    # 3. paper-session
-    session_parser = subparsers.add_parser("paper-session", help="Executes a live paper-trading session")
-    session_parser.add_argument("--date", type=str, default=None, help="Session date (YYYY-MM-DD)")
-    session_parser.add_argument("--data-root", type=str, default="data/stage1d", help="Path to data root")
-    session_parser.add_argument("--output-dir", type=str, default="data/paper", help="Output directory")
-
-    # 4. replay
-    replay_parser = subparsers.add_parser("replay", help="Replays deterministic synthetic streaming session")
-    replay_parser.add_argument("--fixture", type=str, default="tsla_earnings_breakout", help="Fixture name")
-    replay_parser.add_argument("--date", type=str, default="2023-06-15", help="Session date (YYYY-MM-DD)")
-
-    # 5. status
-    status_parser = subparsers.add_parser("status", help="Displays current session and paper trading status")
+    parser = argparse.ArgumentParser(description="Bonde Strategy — Stage 3.1 Live Paper Runner")
+    parser.add_argument(
+        "--mode",
+        choices=["OBSERVE", "PAPER"],
+        default="OBSERVE",
+        help="Operational mode: OBSERVE (listen/calculate, 0 positions) or PAPER (local paper trading)",
+    )
+    parser.add_argument(
+        "--symbols",
+        nargs="+",
+        default=["AAPL", "TSLA", "NVDA", "MSFT", "AMD"],
+        help="List of US equity ticker symbols to stream",
+    )
+    parser.add_argument(
+        "--feed",
+        choices=["iex", "sip"],
+        default="iex",
+        help="Data feed tier: iex (free real-time) or sip (consolidated, $99/mo)",
+    )
+    parser.add_argument(
+        "--date",
+        type=str,
+        default=None,
+        help="Session date (YYYY-MM-DD), default today",
+    )
+    parser.add_argument(
+        "--start-date",
+        type=str,
+        default=None,
+        help="Start date for multi-session run (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--end-date",
+        type=str,
+        default=None,
+        help="End date for multi-session run (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--data-root",
+        type=str,
+        default="data/stage1d",
+        help="Path to historical daily bars and security master for premarket prep",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="data/paper_live",
+        help="Output directory for reports and telemetry",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate configuration and exit without connecting",
+    )
 
     args = parser.parse_args()
 
-    if args.command == "validate":
-        cal = USMarketCalendar()
-        today = date.today()
-        is_trading = cal.is_trading_day(today)
-        next_day = cal.get_next_trading_day(today)
-        print("=== STAGE 2 SYSTEM VALIDATION ===")
-        print(f"Date: {today.isoformat()}")
-        print(f"Is US Trading Day: {is_trading}")
-        print(f"Next US Trading Day: {next_day.isoformat()}")
-        print("Calendar: PASS")
-        print("Validator: READY")
-        print("Paper Broker: READY")
-        print("Safety Governor: READY (FAIL-CLOSED)")
+    # Determine date(s)
+    if args.start_date and args.end_date:
+        start_d = datetime.strptime(args.start_date, "%Y-%m-%d").date()
+        end_d = datetime.strptime(args.end_date, "%Y-%m-%d").date()
+        is_multi_session = True
+        session_dates = USMarketCalendar().get_trading_days_between(start_d, end_d)
+    else:
+        is_multi_session = False
+        session_d = datetime.strptime(args.date, "%Y-%m-%d").date() if args.date else datetime.now(NY_TZ).date()
+        session_dates = [session_d]
 
-    elif args.command == "prepare":
-        session_d = date.fromisoformat(args.date) if args.date else date.today()
-        cal = USMarketCalendar()
-        if not cal.is_trading_day(session_d):
-            session_d = cal.get_prior_trading_day(session_d)
+    logger.info(f"=== STAGE 3.2 LIVE SESSION INITIALIZING ===")
+    logger.info(f"Mode: {args.mode}")
+    logger.info(f"Symbols ({len(args.symbols)}): {', '.join(args.symbols)}")
+    logger.info(f"Feed: {args.feed.upper()} (Data source: IEX single-exchange feed)")
+    logger.info(f"Session Dates ({len(session_dates)}): {[d.isoformat() for d in session_dates]}")
+    logger.info(f"Local Paper Execution: ENFORCED (Zero real broker connectivity)")
 
-        print(f"=== RUNNING DAILY PRE-MARKET PREPARATION ({session_d.isoformat()}) ===")
-        pipeline = DailyPrepPipeline(data_root=Path(args.data_root))
-        focus_list = pipeline.run_prep(session_date=session_d)
-        out_dir = Path("data/paper") / session_d.strftime("%Y-%m-%d")
-        focus_list.save_parquet(out_dir / "focus_list.parquet")
-        focus_list.save_json(out_dir / "focus_list.json")
-        print(f"Regime: {focus_list.regime.value}")
-        print(f"Daily Budget: {focus_list.daily_budget_r}R | Allocated: {focus_list.total_allocated_r}R")
-        print(f"Approved Candidates: {len(focus_list.approved_candidates)}")
-        print(f"Rejected Candidates: {len(focus_list.rejected_candidates)}")
-        print(f"Focus List Saved to: {out_dir / 'focus_list.parquet'}")
+    # 1. Config from environment
+    try:
+        config = AlpacaConfig.from_env(symbols=args.symbols)
+    except Exception as e:
+        logger.warning(
+            f"Alpaca credentials not in environment ({e}). Using mock/paper test credentials for dry run."
+        )
+        config = AlpacaConfig(api_key="DRY_RUN_KEY", secret_key="DRY_RUN_SECRET", symbols=args.symbols, feed=args.feed)
 
-    elif args.command == "paper-session":
-        session_d = date.fromisoformat(args.date) if args.date else date.today()
-        print(f"=== EXECUTING PAPER TRADING SESSION ({session_d.isoformat()}) ===")
+    if args.dry_run:
+        logger.info("Dry run complete. Configuration is valid.")
+        sys.exit(0)
+
+    # 2. Execution
+    if is_multi_session:
+        from bonde.live.multi_session import MultiSessionRunner
+        multi_runner = MultiSessionRunner(
+            output_dir=Path(args.output_dir),
+            data_root=Path(args.data_root),
+            mode=OperationalMode(args.mode),
+        )
+        adapter = AlpacaMarketDataAdapter(config)
+        adapter.start(args.symbols)
+        try:
+            for s_date in session_dates:
+                logger.info(f"Running multi-session for {s_date}...")
+                multi_runner.run_session(s_date, adapter, args.symbols)
+            agg = multi_runner.generate_aggregate_report()
+            print("\n" + agg.to_markdown())
+        finally:
+            adapter.stop()
+    else:
+        adapter = AlpacaMarketDataAdapter(config)
         engine = LiveSessionEngine(
-            session_date=session_d,
+            session_date=session_dates[0],
             data_root=Path(args.data_root),
             output_dir=Path(args.output_dir),
+            initial_equity=100_000.0,
         )
-        engine.run_premarket()
-        engine.open_session()
-        summary = engine.close_session()
-        print("Session completed successfully.")
-        print(f"Summary: {summary}")
+        validator = LiveDataValidator()
+        runner = LivePaperRunner(
+            adapter=adapter,
+            engine=engine,
+            validator=validator,
+            mode=OperationalMode(args.mode),
+            session_date=session_dates[0],
+        )
 
-    elif args.command == "replay":
-        session_d = date.fromisoformat(args.date) if args.date else date(2023, 6, 15)
-        print(f"=== REPLAYING DETERMINISTIC SYNTHETIC SESSION ({session_d.isoformat()}) ===")
-        res = SyntheticSessionReplayer.run_synthetic_session(session_date=session_d)
-        print("Replay completed successfully.")
-        print(f"Summary: {res['summary']}")
-
-    elif args.command == "status":
-        cal = USMarketCalendar()
-        now = datetime.now()
-        print("=== STAGE 2 PAPER TRADING STATUS ===")
-        print(f"Clock: {now.isoformat()}")
-        print(f"Is RTH: {cal.is_regular_trading_hours(now)}")
-        print("Paper Broker State: IDLE")
-        print("Reconciliation: OK")
-
-    else:
-        parser.print_help()
+        try:
+            adapter.start(args.symbols)
+            summary = runner.run_session(session_date=session_dates[0], symbols=args.symbols)
+            report = runner.generate_daily_report()
+            rep_path = Path(args.output_dir) / session_dates[0].strftime("%Y-%m-%d") / "daily_operational_report.json"
+            report.to_json(rep_path)
+            logger.info(f"Report exported to {rep_path}")
+            print("\n" + report.to_markdown())
+        except KeyboardInterrupt:
+            logger.info("Session interrupted by user.")
+            runner.halt("USER_INTERRUPT")
+        finally:
+            adapter.stop()
+            logger.info("Adapter disconnected. Session closed.")
 
 
 if __name__ == "__main__":

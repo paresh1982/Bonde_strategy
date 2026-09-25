@@ -1,5 +1,5 @@
 """
-Stage 2 US Real-Time Paper-Trading Infrastructure Module
+Live & Paper-Trading Infrastructure Module (Stage 2, Stage 3 & Stage 3.1)
 """
 
 from .broker import PaperExecutionBroker
@@ -13,6 +13,36 @@ from .session import LiveSessionEngine, LiveSessionState
 from .synthetic_session import SyntheticSessionGenerator, SyntheticSessionReplayer
 from .telemetry import LiveTelemetryLogger, LiveTelemetryRecord
 from .validation import LiveDataValidator
+from .runner import LivePaperRunner
+from .operational_modes import (
+    DailyOperationalReport,
+    DecisionRecord,
+    DecisionType,
+    LiveDataHealth,
+    OperationalDecisionJournal,
+    OperationalMode,
+    ProviderMetadata,
+)
+from .adapters.alpaca import (
+    AlpacaConfig,
+    AlpacaMarketDataAdapter,
+    AlpacaConnectionManager,
+    normalize_alpaca_bar,
+    normalize_alpaca_quote,
+    AlpacaConnectionError,
+    AlpacaDataError,
+    AlpacaAuthError,
+)
+
+from .multi_session import (
+    CandidateDecisionAudit,
+    FeedQualityTelemetry,
+    IEXSymbolDiagnostics,
+    MultiSessionAggregateReport,
+    MultiSessionRunner,
+    PersistentSessionLedger,
+    SessionLedgerEntry,
+)
 
 __all__ = [
     "USMarketCalendar",
@@ -36,4 +66,27 @@ __all__ = [
     "TradingSession",
     "RejectedEvent",
     "DataQualityStatus",
+    "LivePaperRunner",
+    "OperationalMode",
+    "LiveDataHealth",
+    "DecisionType",
+    "DecisionRecord",
+    "ProviderMetadata",
+    "OperationalDecisionJournal",
+    "DailyOperationalReport",
+    "AlpacaConfig",
+    "AlpacaMarketDataAdapter",
+    "AlpacaConnectionManager",
+    "normalize_alpaca_bar",
+    "normalize_alpaca_quote",
+    "AlpacaConnectionError",
+    "AlpacaDataError",
+    "AlpacaAuthError",
+    "CandidateDecisionAudit",
+    "FeedQualityTelemetry",
+    "IEXSymbolDiagnostics",
+    "MultiSessionAggregateReport",
+    "MultiSessionRunner",
+    "PersistentSessionLedger",
+    "SessionLedgerEntry",
 ]
